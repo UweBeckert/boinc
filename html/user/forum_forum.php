@@ -134,7 +134,8 @@ function show_forum($forum, $start, $sort_style, $user) {
         $start
     );
     echo $page_nav;
-    start_forum_table(array(
+    start_table('table-striped');
+    row_heading_array(array(
         "",
         tra("Threads"),
         tra("Posts"),
@@ -167,7 +168,7 @@ function show_forum($forum, $start, $sort_style, $user) {
         //if ($thread->status==1){
             // This is an answered helpdesk thread
         if ($user && is_subscribed($thread, $subs)) {
-            echo '<tr class="bg-success">';
+            echo '<tr class="bg-info">';
         } else {
             // Just a standard thread.
             echo '<tr>';
