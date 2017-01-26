@@ -297,24 +297,6 @@ int parse_command_line(char* p, char** argv) {
 
 // remove whitespace from start and end of a string
 //
-void strip_whitespace(char *str) {
-    char *s = str;
-    while (*s) {
-        if (!isascii(*s)) break;
-        if (!isspace(*s)) break;
-        s++;
-    }
-    if (s != str) strcpy_overlap(str, s);
-
-    size_t n = strlen(str);
-    while (n>0) {
-        n--;
-        if (!isascii(str[n])) break;
-        if (!isspace(str[n])) break;
-        str[n] = 0;
-    }
-}
-
 void strip_whitespace(string& str) {
     while (1) {
         if (str.length() == 0) break;
@@ -330,6 +312,12 @@ void strip_whitespace(string& str) {
         n--;
     }
     str.erase(n, str.length()-n);
+}
+
+void strip_whitespace(char *str) {
+    string s = str;
+    strip_whitespace(s);
+    strcpy(str, s.c_str());
 }
 
 char* time_to_string(double t) {
@@ -814,13 +802,11 @@ int path_to_filename(string fpath, string& fname) {
 // wrapper for path_to_filename(string, string&)
 int path_to_filename(string fpath, char* &fname) {
     string name;
-    int ret;
-    if ((ret = path_to_filename(fpath, name))) {
-        return ret;
-    } else {
-        fname = new char[name.size()+1];
-        std::copy(name.begin(), name.end(), fname);
-        fname[name.size()]= '\0';
+    int retval = path_to_filename(fpath, name);
+    if (retval) {
+        return retval;
     }
+    fname = new char[name.size()+1];
+    strcpy(fname, name.c_str());
     return 0;
 }

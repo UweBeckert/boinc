@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2016 University of California
+// Copyright (C) 2017 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -20,8 +20,11 @@
 #ifndef _MAC_UTIL_H_
 #define _MAC_UTIL_H_
 
-    double              getTimeSinceBoot(void);
+#include <Carbon/Carbon.h>
 
+    double              getTimeSinceBoot(void);
     void                getPathToThisApp(char* pathBuf, size_t bufSize);
+    void                BringAppToFront();
+    pid_t               getPidIfRunning(char * bundleID);
 
 #endif      // _MAC_UTIL_H_
