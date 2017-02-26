@@ -49,18 +49,6 @@
 
 static const char *run_mode_name[] = {"", "always", "auto", "never"};
 
-static void am_url_filename(char* url, char* filename) {
-    char buf [1024];
-    escape_project_url(url, buf);
-    sprintf(filename, "acct_mgr_url_%s.xml", buf);
-}
-
-static void am_login_filename(char* url, char* filename) {
-    char buf[1024];
-    escape_project_url(url, buf);
-    sprintf(filename, "acct_mgr_login_%s.xml", buf);
-}
-
 // do an account manager RPC;
 // if URL is null, detach from current account manager
 //
@@ -87,15 +75,8 @@ int ACCT_MGR_OP::do_rpc(
     if (!strlen(url) && strlen(gstate.acct_mgr_info.master_url)) {
         msg_printf(NULL, MSG_INFO, "Removing account manager info");
         gstate.acct_mgr_info.clear();
-
-        // don't delete the url and login files in case
-        // user later reattaches to same AM (use same opaque data)
-        //
-        // char filename[MAXPATHLEN];
-        // am_url_filename(master_url, filename);
-        // boinc_delete_file(filename);
-        // am_login_filename(master_url, filename);
-        // boinc_delete_file(filename);
+        boinc_delete_file(ACCT_MGR_URL_FILENAME);
+        boinc_delete_file(ACCT_MGR_LOGIN_FILENAME);
         error_num = 0;
         for (i=0; i<gstate.projects.size(); i++) {
             gstate.projects[i]->detach_ams();
@@ -756,11 +737,9 @@ void ACCT_MGR_OP::handle_reply(int http_op_retval) {
 }
 
 int ACCT_MGR_INFO::write_info() {
-    char filename[MAXPATHLEN];
     FILE* p;
     if (strlen(master_url)) {
-        am_url_filename(master_url, filename); 
-        p = fopen(filename, "w");
+        p = fopen(ACCT_MGR_URL_FILENAME, "w");
         if (p) {
             fprintf(p,
                 "<acct_mgr>\n"
@@ -784,8 +763,7 @@ int ACCT_MGR_INFO::write_info() {
     }
 
     if (strlen(login_name)) {
-        am_login_filename(master_url, filename); 
-        p = fopen(filename, "w");
+        p = fopen(ACCT_MGR_LOGIN_FILENAME, "w");
         if (p) {
             fprintf(
                 p,
@@ -839,7 +817,9 @@ int ACCT_MGR_INFO::parse_login_file(FILE* p) {
     mf.init_file(p);
     XML_PARSER xp(&mf);
     if (!xp.parse_start("acct_mgr_login")) {
-        //
+        msg_printf(NULL, MSG_INTERNAL_ERROR,
+            "missing start tag in account manager login file"
+        );
     }
     while (!xp.get_tag()) {
         if (!xp.is_tag) {
@@ -874,32 +854,28 @@ int ACCT_MGR_INFO::parse_login_file(FILE* p) {
     return 0;
 }
 
+// called at client startup.
+// If currently using an AM, read its URL and login files
+//
 int ACCT_MGR_INFO::init() {
     MIOFILE mf;
     FILE*   p;
     int retval;
-    char filename[MAXPATHLEN];
 
     clear();
-    am_url_filename(master_url, filename);
-    p = fopen(filename, "r");
+    p = fopen(ACCT_MGR_URL_FILENAME, "r");
     if (!p) {
-        // try old name
+        // if not using acct mgr, make sure projects not flagged,
+        // otherwise won't be able to detach them.
         //
-        p = fopen(ACCT_MGR_URL_FILENAME, "r");
-        if (!p) {
-            // if not using acct mgr, make sure projects not flagged,
-            // otherwise won't be able to detach them.
-            //
-            for (unsigned int i=0; i<gstate.projects.size(); i++) {
-                gstate.projects[i]->attached_via_acct_mgr = false;
-            }
-            return 0;
+        for (unsigned int i=0; i<gstate.projects.size(); i++) {
+            gstate.projects[i]->attached_via_acct_mgr = false;
         }
+        return 0;
     }
     mf.init_file(p);
     XML_PARSER xp(&mf);
-    if (!xp.parse_start("acct_mgr_login")) {
+    if (!xp.parse_start("acct_mgr")) {
         //
     }
     while (!xp.get_tag()) {
@@ -932,12 +908,7 @@ int ACCT_MGR_INFO::init() {
     }
     fclose(p);
 
-    am_login_filename(master_url, filename);
-    p = fopen(filename, "r");
-    if (!p) {
-        // try old name
-        p = fopen(ACCT_MGR_LOGIN_FILENAME, "r");
-    }
+    p = fopen(ACCT_MGR_LOGIN_FILENAME, "r");
     if (p) {
         parse_login_file(p);
         fclose(p);

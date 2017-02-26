@@ -21,11 +21,11 @@ $sensing = array(
         array(
             "Quake Catcher Network",
             "http://quakecatcher.net",
-            tra("Caltech"),
+            tra("University of Southern California"),
             tra("Seismology"),
             tra("Quake-Catcher Network uses sensors attached to computers and smartphones to detect seismic waves."),
             "",
-            "",
+            "http://quakecatcher.net/sensor/",
             "Help detect earthquakes"
         ),
         array(
@@ -387,16 +387,16 @@ $astro_phys_chem = array(
             "",
             tra("Improve the design of the Large Hadron Collider")
         ),
-        array(
-            "vLHCathome",
-            "http://lhcathome2.cern.ch/vLHCathome/",
-            tra("CERN (European Organization for Nuclear Research)"),
-            tra("Physics"),
-            tra("This project uses CERN-developed virtual machine technology for LHC event physics simulation on volunteer computers.  Requires that you install VirtualBox on your computer"),
-            "t4t.png",
-            "",
-            tra("Simulate high-energy particle collisions")
-        ),
+//        array(
+//            "vLHCathome",
+//            "http://lhcathome2.cern.ch/vLHCathome/",
+//            tra("CERN (European Organization for Nuclear Research)"),
+//            tra("Physics"),
+//            tra("This project uses CERN-developed virtual machine technology for LHC event physics simulation on volunteer computers.  Requires that you install VirtualBox on your computer"),
+//            "t4t.png",
+//            "",
+//            tra("Simulate high-energy particle collisions")
+//        ),
         array(
             "ATLAS@Home",
             "http://atlasathome.cern.ch/",

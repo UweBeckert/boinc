@@ -79,18 +79,20 @@ function navbar_right($user) {
     ';
     if (!$is_login_page) {
         if ($user) {
-            echo '
-                <li><a href=home.php>'.$user->name.'</a></li>
-            ';
+            echo sprintf('
+                <li><a href=%shome.php>'.$user->name.'</a></li>
+                ', url_base()
+            );
             $url_tokens = url_tokens($user->authenticator);
-            echo '
-                <li><a href="logout.php?'.$url_tokens.'">Log out</a></li>
-            ';
+            echo sprintf('<li><a href="%slogout.php?%s">Log out</a></li>',
+                url_base(), $url_tokens
+            );
         } else {
-            echo '
-                <li><a href="create_account_form.php">Sign Up</a></li>
-                <li><a href="login_form.php">Login</a></li>
-            ';
+            echo sprintf('
+                <li><a href="%screate_account_form.php">Sign Up</a></li>
+                <li><a href="%slogin_form.php">Login</a></li>
+                ', url_base(), url_base()
+            );
         }
     }
 }
@@ -270,11 +272,13 @@ function grid($top_func, $left_func, $right_func, $left_width=6) {
     ';
 }
 
-function form_start($action) {
-    echo '
-        <div class="container">
-        <form class="form-horizontal" method="get" action="'.$action.'">
-    ';
+function form_start($action, $method='get') {
+    echo sprintf(
+        '<div class="container">
+        <form class="form-horizontal" method="%s" action="%s">'
+        ,
+        $method, $action
+    );
 }
 
 function form_input_hidden($name, $value) {
@@ -299,6 +303,18 @@ function form_input_text($label, $name, $value='', $type='text', $attrs='') {
     ';
 }
 
+// display name/value with same formatting as form
+//
+function form_attr($name, $value) {
+    echo sprintf('
+        <div class="form-group">
+            <div class="col-sm-2 text-right">%s</div>
+            <div class="col-sm-10">%s</div>
+        </div>
+    ', $name, $value
+    );
+}
+
 function form_input_textarea($label, $name, $value='') {
     echo '
         <div class="form-group">
@@ -310,6 +326,8 @@ function form_input_textarea($label, $name, $value='') {
     ';
 }
 
+// $items is either a string of <option> elements, or an array
+//
 function form_select($label, $name, $items) {
     echo '
         <div class="form-group">
@@ -317,9 +335,13 @@ function form_select($label, $name, $items) {
             <div class="col-sm-10">
                 <select class="form-control" id="'.$name.'" name="'.$name.'">
     ';
-    foreach ($items as $i) {
-        echo '<option value="'.$i[0].'">'.$i[1].'</option>
-        ';
+    if (is_array($items)) {
+        foreach ($items as $i) {
+            echo '<option value="'.$i[0].'">'.$i[1].'</option>
+            ';
+        }
+    } else {
+        echo $items;
     }
     echo "</select></div></div>\n";
 }

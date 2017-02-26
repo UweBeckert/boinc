@@ -17,19 +17,24 @@
 
 # test functions for submit_api.py
 
+# YOU MUST CREATE A FILE "test_auth' CONTAINING
+#
+# project URL
+# authenticator of your account
+
 from submit_api import *
 
-project_url = 'http://isaac.ssl.berkeley.edu/test/'
-
-# read auth from a file so we don't have to include it here
+# read URL and auth from a file so we don't have to include it here
 #
 def get_auth():
     with open("test_auth", "r") as f:
-        return (f.readline()).strip()
+        url = (f.readline()).strip()
+        auth = (f.readline()).strip()
+    return [url, auth]
 
 # make a batch description, to be passed to estimate_batch() or submit_batch()
 #
-def make_batch_desc():
+def make_batch_desc(batch_name):
     file = FILE_DESC()
     file.mode = 'local_staged'
     file.source = 'input'
@@ -38,16 +43,15 @@ def make_batch_desc():
     job.files = [file]
 
     batch = BATCH_DESC()
-    batch.project = project_url
-    batch.authenticator = get_auth()
+    [batch.project, batch.authenticator] = get_auth()
     batch.app_name = "uppercase"
-    batch.batch_name = "blah16"
+    batch.batch_name = batch_name
     batch.jobs = []
 
     for i in range(2):
-        job.rsc_fpops_est = i*1e9
         job.command_line = '-i %s' %(i)
-        job.wu_template = """
+        if True:
+            job.wu_template = """
 <input_template>
     <file_info>
     </file_info>
@@ -57,12 +61,13 @@ def make_batch_desc():
         </file_ref>
         <target_nresults>1</target_nresults>
         <min_quorum>1</min_quorum>
-        <credit>2</credit>
+        <credit>%d</credit>
         <rsc_fpops_est>   60e9  </rsc_fpops_est>
     </workunit>
 </input_template>
-"""
-        job.result_template = """
+""" % (i+1)
+        if True:
+            job.result_template = """
 <output_template>
     <file_info>
         <name><OUTFILE_0/></name>
@@ -79,6 +84,7 @@ def make_batch_desc():
     </result>
 </output_template>
 """
+        job.rsc_fpops_est = (i+1)*1e9
         batch.jobs.append(copy.copy(job))
 
     return batch
@@ -87,36 +93,34 @@ def test_estimate_batch():
     batch = make_batch_desc()
     #print batch.to_xml("submit")
     r = estimate_batch(batch)
-    if r[0].tag == 'error':
-        print 'error: ', r.find('error_msg').text
+    if check_error(r):
         return
     print 'estimated time: ', r[0].text, ' seconds'
 
-def test_submit_batch():
-    batch = make_batch_desc()
+def test_submit_batch(batch_name):
+    batch = make_batch_desc(batch_name)
     r = submit_batch(batch)
-    if r[0].tag == 'error':
-        print 'error: ', r[0].find('error_msg').text
+    if check_error(r):
         return
     print 'batch ID: ', r[0].text
 
 def test_query_batches():
     req = REQUEST()
-    req.project = project_url
-    req.authenticator = get_auth()
+    [req.project, req.authenticator] = get_auth()
     req.get_cpu_time = True
     r = query_batches(req)
+    if check_error(r):
+        return
     print ET.tostring(r)
 
-def test_query_batch():
+def test_query_batch(id):
     req = REQUEST()
-    req.project = project_url
-    req.authenticator = get_auth()
-    req.batch_id = 271
+    [req.project, req.authenticator] = get_auth()
+    req.batch_id = id
     req.get_cpu_time = True
+    req.get_job_details = True
     r = query_batch(req)
-    if r[0].tag == 'error':
-        print 'error: ', r[0].find('error_msg').text
+    if check_error(r):
         return
     print ET.tostring(r)
     print 'njobs: ', r.find('njobs').text
@@ -126,44 +130,65 @@ def test_query_batch():
     print 'jobs:'
     for job in r.findall('job'):
         print '   id: ', job.find('id').text
-        print '      n_outfiles: ', job.find('n_outfiles').text
         # ... various other fields
 
 def test_create_batch():
     req = CREATE_BATCH_REQ()
-    req.project = project_url
-    req.authenticator = get_auth()
+    [req.project, req.authenticator] = get_auth()
     req.app_name = 'uppercase'
     req.batch_name = 'foobar'
     req.expire_time = 0
     r = create_batch(req)
-    if r[0].tag == 'error':
-        print 'error: ', r[0].find('error_msg').text
+    if check_error(r):
         return
     print 'batch ID: ', r[0].text
 
 def test_abort_batch():
     req = REQUEST()
-    req.project = project_url
-    req.authenticator = get_auth()
+    [req.project, req.authenticator] = get_auth()
     req.batch_id = 271
     r = abort_batch(req)
-    if r[0].tag == 'error':
-        print 'error: ', r.find('error_msg').text
+    if check_error(r):
         return
     print 'success'
 
 def test_upload_files():
     req = UPLOAD_FILES_REQ()
-    req.project = project_url
-    req.authenticator = get_auth()
+    [req.project, req.authenticator] = get_auth()
     req.batch_id = 283
     req.local_names = ('updater.cpp', 'kill_wu.cpp')
-    req.boinc_names = ('dxxx_updater.cpp', 'dxxx_kill_wu.cpp')
+    req.boinc_names = ('dxxxb_updater.cpp', 'dxxxb_kill_wu.cpp')
     r = upload_files(req)
-    if r[0].tag == 'error':
-        print 'error: ', r[0].find('error_msg').text
+    if check_error(r):
         return
-    print 'success'
+    print 'upload_files: success'
 
-test_upload_files()
+def test_query_files():
+    req = QUERY_FILES_REQ()
+    [req.project, req.authenticator] = get_auth()
+    req.batch_id = 271
+    req.boinc_names = ('dxxx_updater.cpp', 'dxxx_kill_wu.cpp')
+    r = query_files(req)
+    if check_error(r):
+        return
+    print 'absent files:'
+    for f in r[0]:
+        print f.text
+
+def test_get_output_file():
+    req = REQUEST()
+    [req.project, req.authenticator] = get_auth()
+    req.instance_name = 'uppercase_32275_1484961754.784017_0_0'
+    req.file_num = 1
+    r = get_output_file(req)
+    print(r)
+
+def test_get_output_files():
+    req = REQUEST()
+    [req.project, req.authenticator] = get_auth()
+    req.batch_id = 271
+    r = get_output_files(req)
+    print(r)
+
+test_query_batch(326)
+#test_submit_batch('batch_30')

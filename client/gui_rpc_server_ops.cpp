@@ -21,6 +21,7 @@
 
 #ifdef __APPLE__
 #include <Carbon/Carbon.h>
+#include <libproc.h>
 #endif
 
 #ifdef _WIN32
@@ -157,14 +158,12 @@ static void handle_get_disk_usage(GUI_RPC_CONN& grc) {
 #ifdef __APPLE__
     if (gstate.launched_by_manager) {
         // If launched by Manager, get Manager's size on disk
-        ProcessSerialNumber managerPSN;
-        FSRef ourFSRef;
         char path[MAXPATHLEN];
         double manager_size = 0.0;
-        OSStatus err;
-        err = GetProcessForPID(getppid(), &managerPSN);
-        if (! err) err = GetProcessBundleLocation(&managerPSN, &ourFSRef);
-        if (! err) err = FSRefMakePath (&ourFSRef, (UInt8*)path, sizeof(path));
+        OSStatus err = noErr;
+        
+        retval = proc_pidpath(getppid(), path, sizeof(path));
+        if (retval <= 0) err = fnfErr;
         if (! err) dir_size(path, manager_size, true);
         if (! err) boinc_non_project += manager_size;
     }
@@ -804,7 +803,11 @@ void handle_lookup_account_poll(GUI_RPC_CONN& grc) {
             grc.lookup_account_op.error_num
         );
     } else {
-        grc.mfout.printf("%s", grc.lookup_account_op.reply.c_str());
+        const char *p = grc.lookup_account_op.reply.c_str();
+        const char *q = strstr(p, "<account_out"); 
+        if (!q) q = strstr(p, "<error");
+        if (!q) q = "<account_out/>\n"; 
+        grc.mfout.printf("%s", q); 
     }
 }
 
@@ -996,6 +999,8 @@ static void handle_acct_mgr_rpc_poll(GUI_RPC_CONN& grc) {
 }
 
 static void handle_get_newer_version(GUI_RPC_CONN& grc) {
+    gstate.new_version_check(true);
+
     grc.mfout.printf(
         "<newer_version>%s</newer_version>\n"
         "<download_url>%s</download_url>\n",
@@ -1072,7 +1077,9 @@ static void read_all_projects_list_file(GUI_RPC_CONN& grc) {
     int retval = read_file_string(ALL_PROJECTS_LIST_FILENAME, s);
     if (!retval) {
         strip_whitespace(s);
-        grc.mfout.printf("%s\n", s.c_str());
+        const char *q = strstr(s.c_str(), "<projects");
+        if (!q) q = "<projects/>";        
+        grc.mfout.printf("%s\n", q);
     }
 }
 

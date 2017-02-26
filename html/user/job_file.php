@@ -117,7 +117,7 @@ function query_files($r) {
         // update the delete time first to avoid race condition
         // with job file deleter
         //
-        $job_file = BoincJobFile::lookup_md5($fname);
+        $job_file = BoincJobFile::lookup_name($fname);
         if ($job_file && $job_file->delete_time < $delete_time) {
             $retval = $job_file->update("delete_time=$delete_time");
             if ($retval) {
@@ -131,23 +131,19 @@ function query_files($r) {
                 $jf_id = $job_file->id;
             } else {
                 $jf_id = BoincJobFile::insert(
-                    "(md5, create_time, delete_time) values ('$fname', $now, $delete_time)"
+                    "(name, create_time, delete_time) values ('$fname', $now, $delete_time)"
                 );
                 if (!$jf_id) {
-                    xml_error(-1, "query_file(): BoincJobFile::insert($fname) failed: ".BoincDb::error());
+                    xml_error(-1, "query_files(): BoincJobFile::insert($fname) failed: ".BoincDb::error());
                 }
             }
             // create batch association if needed
             //
             if ($batch_id) {
-                $ret = BoincBatchFileAssoc::insert(
+                BoincBatchFileAssoc::insert(
                     "(batch_id, job_file_id) values ($batch_id, $jf_id)"
                 );
-                if (!$ret) {
-                    xml_error(-1,
-                        "BoincBatchFileAssoc::insert() failed: ".BoincDb::error()
-                    );
-                }
+                // this return error if assoc already exists; ignore
             }
         } else {
             if ($job_file) {
@@ -221,11 +217,23 @@ function upload_files($r) {
         $tmp_name = $f['tmp_name'];
         $fname = $phys_names[$i];
         $path = dir_hier_path($fname, project_dir() . "/download", $fanout);
-        if (!move_uploaded_file($tmp_name, $path)) {
-            xml_error(-1, "could not move $tmp_name to $path");
+
+        switch(check_download_file($tmp_name, $path)) {
+        case 0:
+            break;
+        case 1:
+            if (!move_uploaded_file($tmp_name, $path)) {
+                xml_error(-1, "could not move $tmp_name to $path");
+            }
+            break;
+        case -1:
+            xml_error(-1, "file immutability violation for $fname");
+        case -2:
+            xml_error(-1, "file operation failed; check permissions in download/*");
         }
+
         $jf_id = BoincJobFile::insert(
-            "(md5, create_time, delete_time) values ('$fname', $now, $delete_time)"
+            "(name, create_time, delete_time) values ('$fname', $now, $delete_time)"
         );
         if (!$jf_id) {
             xml_error(-1, "BoincJobFile::insert($fname) failed: ".BoincDb::error());

@@ -204,9 +204,10 @@ void JOB_DESC::parse_cmdline(int argc, char** argv) {
 void get_wu_template(JOB_DESC& jd2) {
     // the jobs may specify WU templates.
     //
-    static map<char*, char*> wu_templates;
+    static map<string, char*> wu_templates;
 
-    if (wu_templates.count(jd2.wu_template_file) == 0) {
+    string s = string(jd2.wu_template_file);
+    if (wu_templates.count(s) == 0) {
         char* p;
         int retval = read_file_malloc(jd2.wu_template_file, p, 0, false);
         if (retval) {
@@ -215,9 +216,9 @@ void get_wu_template(JOB_DESC& jd2) {
             );
             exit(1);
         }
-        wu_templates[jd2.wu_template_file] = p;
+        wu_templates[s] = p;
     }
-    strcpy(jd2.wu_template, wu_templates[jd2.wu_template_file]);
+    strcpy(jd2.wu_template, wu_templates[s]);
 }
 
 int main(int argc, char** argv) {
@@ -392,20 +393,23 @@ int main(int argc, char** argv) {
     // this won't get used if we're creating a batch
     // with job-level WU templates
     //
-    retval = read_filename(
-        jd.wu_template_file, jd.wu_template, sizeof(jd.wu_template)
-    );
-    if (retval) {
-        fprintf(stderr,
-            "create_work: can't open input template %s\n", jd.wu_template_file
+    if (boinc_file_exists(jd.wu_template_file)) {
+        retval = read_filename(
+            jd.wu_template_file, jd.wu_template, sizeof(jd.wu_template)
         );
-        exit(1);
+        if (retval) {
+            fprintf(stderr,
+                "create_work: can't open input template %s\n", jd.wu_template_file
+            );
+            exit(1);
+        }
     }
 
     jd.wu.appid = app.id;
 
     strcpy(jd.result_template_path, "./");
     strcat(jd.result_template_path, jd.result_template_file);
+
     if (use_stdin) {
         // clear the WU template name so we'll recognize a job-level one
         //
@@ -429,6 +433,10 @@ int main(int argc, char** argv) {
                 }
                 if (strlen(jd2.wu_template_file)) {
                     get_wu_template(jd2);
+                }
+                if (!strlen(jd2.wu_template)) {
+                    fprintf(stderr, "job is missing input template\n");
+                    exit(1);
                 }
                 jd2.create();
             }
@@ -459,6 +467,10 @@ int main(int argc, char** argv) {
                 //
                 if (strlen(jd2.wu_template_file)) {
                     get_wu_template(jd2);
+                }
+                if (!strlen(jd2.wu_template)) {
+                    fprintf(stderr, "job is missing input template\n");
+                    exit(1);
                 }
                 retval = create_work2(
                     jd2.wu,
