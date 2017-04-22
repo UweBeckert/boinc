@@ -138,8 +138,6 @@ extern "C" {
 
 #include <dlfcn.h>
 #endif
-
-mach_port_t gEventHandle = NULL;
 #endif  // __APPLE__
 
 #ifdef _HPUX_SOURCE
@@ -1485,15 +1483,12 @@ int HOST_INFO::get_memory_info() {
 #elif defined(__APPLE__)
     // On Mac OS X, sysctl with selectors CTL_HW, HW_PHYSMEM returns only a 
     // 4-byte value, even if passed an 8-byte buffer, and limits the returned 
-    // value to 2GB when the actual RAM size is > 2GB.  The Gestalt selector 
-    // gestaltPhysicalRAMSizeInMegabytes is available starting with OS 10.3.0.
-    SInt32 mem_size;
-    if (Gestalt(gestaltPhysicalRAMSizeInMegabytes, &mem_size)) {
-        msg_printf(NULL, MSG_INTERNAL_ERROR,
-            "Couldn't determine physical RAM size"
-        );
-    }
-    m_nbytes = (1024. * 1024.) * (double)mem_size;
+    // value to 2GB when the actual RAM size is > 2GB.
+    // But HW_MEMSIZE returns a uint64_t value.
+    uint64_t mem_size;
+    size_t len = sizeof(mem_size);
+    sysctlbyname("hw.memsize", &mem_size, &len, NULL, 0);
+    m_nbytes = mem_size;
 #elif defined(_HPUX_SOURCE)
     struct pst_static pst; 
     pstat_getstatic(&pst, sizeof(pst), (size_t)1, 0);
@@ -1922,6 +1917,107 @@ inline bool all_input_idle(time_t t) {
     }
     return true;
 }
+#ifdef __APPLE__
+
+// We can't link the client with the AppKit framework because the client
+// must be setuid boinc_master. So the client uses this to get the system
+// up time instead of our getTimeSinceBoot() function in lib/mac_util.mm.
+int get_system_uptime() {
+    struct timeval tv;
+    size_t len = sizeof(tv);
+    gettimeofday(&tv, 0);
+    time_t now = tv.tv_sec;
+    sysctlbyname("kern.boottime", &tv, &len, NULL, 0);
+    return ((int)now - (int)tv.tv_sec);
+}
+
+// NXIdleTime() is an undocumented Apple API to return user idle time, which 
+// was implemented from before OS 10.0 through OS 10.5.  In OS 10.4, Apple 
+// added the CGEventSourceSecondsSinceLastEventType() API as a replacement for 
+// NXIdleTime().  However, BOINC could not use this newer API when configured 
+// as a pre-login launchd daemon unless that daemon was running as root, 
+// because it could not connect to the Window Server.  So BOINC continued to 
+// use NXIdleTime().  
+//
+// In OS 10.6, Apple removed the NXIdleTime() API.  BOINC can instead use the 
+// IOHIDGetParameter() API in OS 10.6.  When BOINC is a pre-login launchd 
+// daemon running as user boinc_master, this API works properly under OS 10.6 
+// but fails under OS 10.5 and earlier.
+//
+// In OS 10.7, IOHIDGetParameter() fails to recognize activity from remote 
+// logins via Apple Remote Desktop or Screen Sharing (VNC), but the 
+// CGEventSourceSecondsSinceLastEventType() API does work with ARD and VNC, 
+// except when BOINC is a pre-login launchd daemon running as user boinc_master.
+//
+// IOHIDGetParameter() is deprecated in OS 10.12, but IORegistryEntryFromPath()
+// and IORegistryEntryCreateCFProperty() do the same thing and have been
+// available since OS 10.0.
+//
+// Also, CGEventSourceSecondsSinceLastEventType() does not detect user activity 
+// when the user who launched the client is switched out by fast user switching.
+//
+// So we use weak-linking of NxIdleTime() to prevent a run-time crash from the 
+// dynamic linker and use it if it exists. 
+// If NXIdleTime does not exist, we call both IOHIDGetParameter() and 
+// CGEventSourceSecondsSinceLastEventType().  If both return without error, 
+// we use the lower of the two returned values.
+//
+//TODO: I believe that the IOHIDSystemEntry returned by IORegistryEntryFromPath()
+// will remain valid as long as the client application runs if we don't call
+// IOObjectRelease() on it, so we could probably make this more efficient by
+// calling IORegistryEntryFromPath() only once. But I have not been able to
+// confirm that, so I call it each time through this function out of caution.
+// Even with calling IORegistryEntryFromPath() each time, this code is much
+// faster than the previous method, which called IOHIDGetParameter().
+//
+bool HOST_INFO::users_idle(
+    bool check_all_logins, double idle_time_to_run, double *actual_idle_time
+) {
+    static bool     error_posted = false;
+    int64_t         idleNanoSeconds;
+    double          idleTime = 0;
+    double          idleTimeFromCG = 0;
+
+    CFTypeRef idleTimeProperty;
+    io_registry_entry_t IOHIDSystemEntry;
+    
+    if (error_posted) goto bail;
+    
+    IOHIDSystemEntry = IORegistryEntryFromPath(kIOMasterPortDefault, "IOService:/IOResources/IOHIDSystem");
+    if (IOHIDSystemEntry != MACH_PORT_NULL) {
+        idleTimeProperty = IORegistryEntryCreateCFProperty(IOHIDSystemEntry, CFSTR(EVSIOIDLE), kCFAllocatorDefault, kNilOptions);
+        CFNumberGetValue((CFNumberRef)idleTimeProperty, kCFNumberSInt64Type, &idleNanoSeconds);
+        idleTime = ((double)idleNanoSeconds) / 1000.0 / 1000.0 / 1000.0;
+        IOObjectRelease(IOHIDSystemEntry);  // Prevent a memory leak (see comment above)
+        CFRelease(idleTimeProperty);
+    } else {
+        // When the system first starts up, allow time for HIDSystem to be available if needed
+        if (get_system_uptime() > (120)) {   // If system has been up for more than 2 minutes
+             msg_printf(NULL, MSG_INFO,
+                "Could not connect to HIDSystem: user idle detection is disabled."
+            );
+            error_posted = true;
+            goto bail;
+        }
+    }
+    
+    if (!gstate.executing_as_daemon) {
+        idleTimeFromCG =  CGEventSourceSecondsSinceLastEventType  
+                (kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType);
+
+        if (idleTimeFromCG < idleTime) {
+            idleTime = idleTimeFromCG;
+        }
+    }
+
+bail:
+    if (actual_idle_time) {
+        *actual_idle_time = idleTime;
+    }
+    return (idleTime > (60 * idle_time_to_run));
+}
+
+#else  // ! __APPLE__
 
 #if HAVE_UTMP_H
 inline bool user_idle(time_t t, struct utmp* u) {
@@ -1949,14 +2045,16 @@ inline bool user_idle(time_t t, struct utmp* u) {
   struct utmp *getutent() {
       if (ufp == NULL) {
 #if defined(UTMP_LOCATION)
-          if ((ufp = fopen(UTMP_LOCATION, "r")) == NULL) {
+          if ((ufp = fopen(UTMP_LOCATION, "r")) == NULL)
 #elif defined(UTMP_FILE)
-          if ((ufp = fopen(UTMP_FILE, "r")) == NULL) {
+          if ((ufp = fopen(UTMP_FILE, "r")) == NULL)
 #elif defined(_PATH_UTMP)
-          if ((ufp = fopen(_PATH_UTMP, "r")) == NULL) {
+          if ((ufp = fopen(_PATH_UTMP, "r")) == NULL)
 #else
-          if ((ufp = fopen("/etc/utmp", "r")) == NULL) {
+          if ((ufp = fopen("/etc/utmp", "r")) == NULL)
 #endif
+          { // Please keep all braces balanced in source files; repeated
+            // open braces in conditional compiles confuse Xcode's editor.
               return((struct utmp *)NULL);
           }
       }
@@ -1987,135 +2085,6 @@ inline bool user_idle(time_t t, struct utmp* u) {
       return true;
   }
 #endif  // HAVE_UTMP_H
-
-#ifdef __APPLE__
-
-int get_system_uptime() {
-    struct timeval tv;
-    size_t len = sizeof(tv);
-    gettimeofday(&tv, 0);
-    time_t now = tv.tv_sec;
-    sysctlbyname("kern.boottime", &tv, &len, NULL, 0);
-    return ((int)now - (int)tv.tv_sec);
-}
-
-// NXIdleTime() is an undocumented Apple API to return user idle time, which 
-// was implemented from before OS 10.0 through OS 10.5.  In OS 10.4, Apple 
-// added the CGEventSourceSecondsSinceLastEventType() API as a replacement for 
-// NXIdleTime().  However, BOINC could not use this newer API when configured 
-// as a pre-login launchd daemon unless that daemon was running as root, 
-// because it could not connect to the Window Server.  So BOINC continued to 
-// use NXIdleTime().  
-//
-// In OS 10.6, Apple removed the NXIdleTime() API.  BOINC can instead use the 
-// IOHIDGetParameter() API in OS 10.6.  When BOINC is a pre-login launchd 
-// daemon running as user boinc_master, this API works properly under OS 10.6 
-// but fails under OS 10.5 and earlier.
-//
-// In OS 10.7, IOHIDGetParameter() fails to recognize activity from remote 
-// logins via Apple Remote Desktop or Screen Sharing (VNC), but the 
-// CGEventSourceSecondsSinceLastEventType() API does work with ARD and VNC, 
-// except when BOINC is a pre-login launchd daemon running as user boinc_master.
-//
-// Also, CGEventSourceSecondsSinceLastEventType() does not detect user activity 
-// when the user who launched the client is switched out by fast user switching.
-//
-// So we use weak-linking of NxIdleTime() to prevent a run-time crash from the 
-// dynamic linker and use it if it exists. 
-// If NXIdleTime does not exist, we call both IOHIDGetParameter() and 
-// CGEventSourceSecondsSinceLastEventType().  If both return without error, 
-// we use the lower of the two returned values.
-//
-bool HOST_INFO::users_idle(
-    bool check_all_logins, double idle_time_to_run, double *actual_idle_time
-) {
-    static bool     error_posted = false;
-    double          idleTime = 0;
-    double          idleTimeFromCG = 0;
-    io_service_t    service;
-    kern_return_t   kernResult = kIOReturnError; 
-    UInt64          params;
-    IOByteCount     rcnt = sizeof(UInt64);
-    void            *IOKitlib = NULL;
-    static bool     triedToLoadNXIdleTime = false;
-    static nxIdleTimeProc  myNxIdleTimeProc = NULL;
-    
-    if (error_posted) goto bail;
-    
-    if (!triedToLoadNXIdleTime) {
-        triedToLoadNXIdleTime = true;
-
-        IOKitlib = dlopen ("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_NOW );
-        if (IOKitlib) {
-            myNxIdleTimeProc = (nxIdleTimeProc)dlsym(IOKitlib, "NXIdleTime");
-        }
-    }
-
-    if (myNxIdleTimeProc) {   // Use NXIdleTime API in OS 10.5 and earlier
-        if (gEventHandle) {
-            idleTime = myNxIdleTimeProc(gEventHandle);    
-        } else {
-            // Initialize Mac OS X idle time measurement / idle detection
-            // Do this here because NXOpenEventStatus() may not be available 
-            // immediately on system startup when running as a deaemon.
-
-            gEventHandle = NXOpenEventStatus();
-            if (!gEventHandle) {
-                if (get_system_uptime() > (120)) {   // If system has been up for more than 2 minutes
-                     msg_printf(NULL, MSG_INFO,
-                        "User idle detection is disabled: initialization failed."
-                    );
-                    error_posted = true;
-                    goto bail;
-                }
-            }
-        }
-    } else {        // NXIdleTime API does not exist in OS 10.6 and later
-        if (gEventHandle) {
-            kernResult = IOHIDGetParameter( gEventHandle, CFSTR(EVSIOIDLE), sizeof(UInt64), &params, &rcnt );
-            if ( kernResult != kIOReturnSuccess ) {
-                msg_printf(NULL, MSG_INFO,
-                    "User idle time measurement failed because IOHIDGetParameter failed."
-                );
-                error_posted = true;
-                goto bail;
-            }
-            idleTime = ((double)params) / 1000.0 / 1000.0 / 1000.0;
-            
-             if (!gstate.executing_as_daemon) {
-                idleTimeFromCG =  CGEventSourceSecondsSinceLastEventType  
-                        (kCGEventSourceStateCombinedSessionState, kCGAnyInputEventType);
-        
-                if (idleTimeFromCG < idleTime) {
-                    idleTime = idleTimeFromCG;
-                }
-            }
-        } else {
-            service = IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching(kIOHIDSystemClass));
-            if (service) {
-                 kernResult = IOServiceOpen(service, mach_task_self(), kIOHIDParamConnectType, &gEventHandle);
-            }
-            if ( (!service) || (kernResult != KERN_SUCCESS) ) {
-                // When the system first starts up, allow time for HIDSystem to be available if needed
-                if (get_system_uptime() > (120)) {   // If system has been up for more than 2 minutes
-                     msg_printf(NULL, MSG_INFO,
-                        "Could not connect to HIDSystem: user idle detection is disabled."
-                    );
-                    error_posted = true;
-                    goto bail;
-                }
-            }
-        }   // End (gEventHandle == NULL)
-    }           // End NXIdleTime API does not exist
-    
-bail:
-    if (actual_idle_time) {
-        *actual_idle_time = idleTime;
-    }
-    return (idleTime > (60 * idle_time_to_run));
-}
-
-#else  // ! __APPLE__
 
 #if LINUX_LIKE_SYSTEM
 bool interrupts_idle(time_t t) {

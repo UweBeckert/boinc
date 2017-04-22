@@ -15,8 +15,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef _APP_CONFIG_
-#define _APP_CONFIG_
+#ifndef BOINC_APP_CONFIG_H
+#define BOINC_APP_CONFIG_H
 
 #include <vector>
 
@@ -33,6 +33,7 @@ struct APP_CONFIG {
     double gpu_gpu_usage;
     double gpu_cpu_usage;
     bool fraction_done_exact;
+    bool report_results_immediately;
 
     int parse(XML_PARSER&, PROJECT*);
     int parse_gpu_versions(XML_PARSER&, PROJECT*);

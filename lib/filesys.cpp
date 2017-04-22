@@ -76,6 +76,10 @@
 
 #include "filesys.h"
 
+#ifdef __APPLE__
+#include "mac_spawn.h"
+#endif
+
 #ifdef _WIN32
 typedef BOOL (CALLBACK* FreeFn)(LPCSTR, PULARGE_INTEGER, PULARGE_INTEGER, PULARGE_INTEGER);
 #endif
@@ -682,7 +686,13 @@ static int boinc_rename_aux(const char* old, const char* newf) {
     if (retval) {
         char buf[MAXPATHLEN+MAXPATHLEN];
         sprintf(buf, "mv \"%s\" \"%s\"", old, newf);
+#ifdef __APPLE__
+        // system() is deprecated in Mac OS 10.10.
+        // Apple says to call posix_spawn instead.
+        retval = callPosixSpawn(buf);
+#else
         retval = system(buf);
+#endif
     }
     if (retval) return ERR_RENAME;
     return 0;
@@ -777,14 +787,16 @@ int boinc_make_dirs(const char* dirpath, const char* filepath) {
 
 
 FILE_LOCK::FILE_LOCK() {
-#ifndef _WIN32
+#if defined(_WIN32) && !defined(__CYGWIN32__)
+  handle = INVALID_HANDLE_VALUE;
+#else
     fd = -1;
 #endif
     locked = false;
 }
 
 FILE_LOCK::~FILE_LOCK() {
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__CYGWIN32__)
     if (fd >= 0) close(fd);
 #endif
 }

@@ -1434,36 +1434,26 @@ void CAdvancedFrame::OnSelectComputer(wxCommandEvent& WXUNUSED(event)) {
     wxString            password = wxEmptyString;
     CMainDocument*      pDoc = wxGetApp().GetDocument();
     long                lRetVal = -1;
+    bool                bRetrievePasswordFromFile = FALSE;
 
     wxASSERT(pDoc);
     wxASSERT(wxDynamicCast(pDoc, CMainDocument));
 
-    if (SelectComputer(hostName, portNum, password, false)) { 
-        if (pDoc->IsComputerNameLocal(hostName)) {
-            lRetVal = pDoc->Connect(
-                wxT("localhost"),
-                GUI_RPC_PORT,
-                wxEmptyString,
-                TRUE,
-                TRUE
-            );
-        } else {
-            // Connect to the remote machine
-            long lPort = GUI_RPC_PORT; 
-            int iPos = hostName.Find(wxT(":")); 
-            if (iPos != wxNOT_FOUND) { 
-                wxString sPort = hostName.substr(iPos + 1); 
-                if (!sPort.ToLong(&lPort)) lPort = GUI_RPC_PORT; 
-                hostName.erase(iPos); 
-            } 
-            lRetVal = pDoc->Connect(
-                hostName.c_str(),
-                portNum,
-                password.c_str(),
-                TRUE,
-                FALSE
-            );
+    if (SelectComputer(hostName, portNum, password, false)) {
+        // possibly read password from file if local computername AND no password was entered
+        if (pDoc->IsComputerNameLocal(hostName) && password == wxEmptyString) {
+            hostName = wxT("localhost");
+            bRetrievePasswordFromFile = TRUE;
         }
+        // Connect to the specified host
+        lRetVal = pDoc->Connect(
+            hostName.c_str(),
+            portNum,
+            password.c_str(),
+            TRUE,
+            bRetrievePasswordFromFile
+        );
+
         if (lRetVal) {
             ShowConnectionFailedAlert();
         }
@@ -1475,6 +1465,7 @@ void CAdvancedFrame::OnClientShutdown(wxCommandEvent& WXUNUSED(event)) {
     wxCommandEvent     evtSelectNewComputer(wxEVT_COMMAND_MENU_SELECTED, ID_SELECTCOMPUTER);
     CMainDocument*     pDoc = wxGetApp().GetDocument();
     CSkinAdvanced*     pSkinAdvanced = wxGetApp().GetSkinManager()->GetAdvanced();
+    int                showDialog = wxGetApp().GetBOINCMGRDisplayShutdownConnectedClientMessage();
     CDlgGenericMessage dlg(this);
     wxString           strDialogTitle = wxEmptyString;
     wxString           strDialogMessage = wxEmptyString;
@@ -1489,29 +1480,31 @@ void CAdvancedFrame::OnClientShutdown(wxCommandEvent& WXUNUSED(event)) {
     // Stop all timers
     StopTimers();
 
+    if (showDialog) {
+        // %s is the application name
+        //    i.e. 'BOINC Manager', 'GridRepublic Manager'
+        strDialogTitle.Printf(
+            _("%s - Shut down the current client..."),
+            pSkinAdvanced->GetApplicationName().c_str()
+        );
 
-    // %s is the application name
-    //    i.e. 'BOINC Manager', 'GridRepublic Manager'
-    strDialogTitle.Printf(
-        _("%s - Shut down the current client..."),
-        pSkinAdvanced->GetApplicationName().c_str()
-    );
+        // 1st %s is the application name
+        //    i.e. 'BOINC Manager', 'GridRepublic Manager'
+        // 2nd %s is the project name
+        //    i.e. 'BOINC', 'GridRepublic'
+        strDialogMessage.Printf(
+            _("%s will shut down the current client\nand prompt you for another host to connect to."),
+            pSkinAdvanced->GetApplicationName().c_str()
+        );
 
-    // 1st %s is the application name
-    //    i.e. 'BOINC Manager', 'GridRepublic Manager'
-    // 2nd %s is the project name
-    //    i.e. 'BOINC', 'GridRepublic'
-    strDialogMessage.Printf(
-        _("%s will shut down the current client\nand prompt you for another host to connect to."),
-        pSkinAdvanced->GetApplicationName().c_str()
-    );
+        dlg.SetTitle(strDialogTitle);
+        dlg.m_DialogMessage->SetLabel(strDialogMessage);
+        dlg.Fit();
+        dlg.Centre();
+    }
 
-    dlg.SetTitle(strDialogTitle);
-    dlg.m_DialogMessage->SetLabel(strDialogMessage);
-    dlg.Fit();
-    dlg.Centre();
-
-    if (wxID_OK == dlg.ShowModal()) {
+    if (!showDialog || wxID_OK == dlg.ShowModal()) {
+        wxGetApp().SetBOINCMGRDisplayShutdownConnectedClientMessage(!dlg.m_DialogDisableMessage->GetValue());
         pDoc->CoreClientQuit();
         pDoc->ForceDisconnect();
         

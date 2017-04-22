@@ -22,8 +22,8 @@
 // ?? Is this only for Visual Studio, or for MINGW too?
 // comments below are contradictory
 
-#ifndef _BOINC_WIN_
-#define _BOINC_WIN_
+#ifndef BOINC_BOINC_WIN_H
+#define BOINC_BOINC_WIN_H
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4996)  // deprecated function names
@@ -38,6 +38,11 @@
 #if _MSC_VER < 1900
 #define snprintf _snprintf
 #endif
+#endif
+
+#ifdef __MINGW32__
+#define strdate     _strdate
+#define strtime     _strtime
 #endif
 
 #ifndef HAVE_CONFIG_H
@@ -402,4 +407,4 @@ void __cdecl __MINGW_NOTHROW fpreset (void);
 
 #define new DEBUG_NEW
 
-#endif //_BOINC_WIN_
+#endif //BOINC_BOINC_WIN_H

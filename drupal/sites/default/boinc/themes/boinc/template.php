@@ -167,9 +167,12 @@ function boinc_preprocess(&$vars, $hook) {
  * @param $hook
  *   The name of the template being rendered ("page" in this case.)
  */
-///* -- Delete this line if you want to use this function
 function boinc_preprocess_page(&$vars, $hook) {
-  
+  // Responsive Design: Add viewport meta tag to HTML head
+  drupal_set_html_head('<meta name="viewport" content="width=device-width, initial-scale=1.0" />');
+  $vars['head'] = drupal_get_html_head();
+  //dpm($vars['head'], "preprocess (all) vars[head]");
+
   // Expose comments to template files; this is needed so that comments can be
   // rendered in locations other than directly below the node content
   $vars['comments'] = $vars['comment_form'] = '';
@@ -177,64 +180,72 @@ function boinc_preprocess_page(&$vars, $hook) {
     $vars['comments'] = comment_render($vars['node']);
     $vars['comment_form'] = drupal_get_form('comment_form', array('nid' => $vars['node']->nid));
   }
-  
-    // Determine locale region code so the correct flag is displayed in footer
-    global $language;
-    global $theme_path;
-    $locality = $language->language;
-    if (strpos($language->language, '-')) {
-      $flag_icon = "{$theme_path}/images/flags/{$language->language}.png";
-      if (!file_exists($flag_icon)) {
-        $lang_code = explode('-', $language->language);
-        $locality = $lang_code[0];
-      }
-    }
-    $vars['flag_path'] = base_path() . path_to_theme() . "/images/flags/{$locality}.png";
-    
-    $server_status_url = variable_get('boinc_server_status_url', '');
-    if (!$server_status_url) {
-      $server_status_url = 'server_status.php';
-    }
-    $vars['server_status_url'] = $server_status_url;
-    
-    $app_list_url = variable_get('boinc_app_list_url', '');
-    if (!$app_list_url) {
-      $app_list_url = 'apps.php';
-    }
-    $vars['app_list_url'] = $app_list_url;
-    
-    // Remove title from search page
-    if (arg(0) == 'search') {
-      unset($vars['title']);
-    }
-    
-    // Apply classes to tabs to allow for better styling options
-    $tabs = explode("\n", $vars['tabs']);
-    array_pop($tabs);
-    end($tabs);
-    $last_key = key($tabs);
 
-    foreach ($tabs as $key => &$tab) {
-        if (strpos($tab, 'li class=')) {
-            if ($key == 0) {
-                $tab = str_replace('li class="', 'li class="first ', $tab);
-            }
-            if ($key == $last_key) {
-                $tab = str_replace('li class="', 'li class="last ', $tab) . '</ul>';
-            }
-        }
-        elseif (strpos($tab, 'li ')) {
-            if ($key == 0) {
-                $tab = str_replace('li ', 'li class="first" ', $tab);
-            }
-            if ($key == $last_key) {
-                $tab = str_replace('li ', 'li class="last" ', $tab) . '</ul>';
-            }
-        }
+  // Determine locale region code so the correct flag is displayed in footer
+  global $language;
+  global $theme_path;
+  $locality = $language->language;
+  if (strpos($language->language, '-')) {
+    $flag_icon = "{$theme_path}/images/flags/{$language->language}.png";
+    if (!file_exists($flag_icon)) {
+      $lang_code = explode('-', $language->language);
+      $locality = $lang_code[0];
     }
-    $vars['tabs'] = implode("\n", $tabs);
+  }
+  $vars['flag_path'] = base_path() . path_to_theme() . "/images/flags/{$locality}.png";
+
+  $server_status_url = variable_get('boinc_server_status_url', '');
+  if (!$server_status_url) {
+    $server_status_url = 'server_status.php';
+  }
+  $vars['server_status_url'] = $server_status_url;
+
+  $app_list_url = variable_get('boinc_app_list_url', '');
+  if (!$app_list_url) {
+    $app_list_url = 'apps.php';
+  }
+  $vars['app_list_url'] = $app_list_url;
+
+  // Remove title from search page
+  if (arg(0) == 'search') {
+    unset($vars['title']);
+  }
+
+  // Apply classes to tabs to allow for better styling options
+  $tabs = explode("\n", $vars['tabs']);
+  array_pop($tabs);
+  end($tabs);
+  $last_key = key($tabs);
+
+  foreach ($tabs as $key => &$tab) {
+      if (strpos($tab, 'li class=')) {
+          if ($key == 0) {
+              $tab = str_replace('li class="', 'li class="first ', $tab);
+          }
+          if ($key == $last_key) {
+              $tab = str_replace('li class="', 'li class="last ', $tab) . '</ul>';
+          }
+      }
+      elseif (strpos($tab, 'li ')) {
+          if ($key == 0) {
+              $tab = str_replace('li ', 'li class="first" ', $tab);
+          }
+          if ($key == $last_key) {
+              $tab = str_replace('li ', 'li class="last" ', $tab) . '</ul>';
+          }
+      }
+  }
+  $vars['tabs'] = implode("\n", $tabs);
+
+  // Get the main menu but only for the branch the page is on.
+  $vars['menu_tree_onlyactive'] = menu_tree('primary-links');
+
+  // Create tertiary menu
+  $vars['tertiary_links'] = menu_navigation_links(variable_get('menu_primary_links_source', 'primary-links'), 2);
+
+  // Create action links
+  $vars['action_links'] = _boinc_action_links();
 }
-// */
 
 /**
  * Override or insert variables into the node templates.
@@ -473,13 +484,42 @@ function boinc_preprocess_block(&$vars, $hook) {
 // */ 
 
 function boinc_preprocess_search_result(&$variables) {
-  $type = strtolower($variables['result']['type']);
+  $type = strtolower($variables['result']['bundle']);
   switch ($type) {
-  case 'team':
-    global $base_url;
+  case 'profile':
+  case 'user':
     $node = $variables['result']['node'];
-    $variables['url'] = $base_url .'/community/teams/' . $node->entity_id;
+    $variables['url'] = url('account/' . $node->is_uid);
+    $variables['title'] = $node->tos_name;
+    $variables['user_image'] = boincuser_get_user_profile_image($node->is_uid);
     break;
+  case 'team':
+    $node = $variables['result']['node'];
+    $variables['url'] = url('/community/teams/' . $node->entity_id);;
+    break;
+  case 'forum':
+    $node = $variables['result']['node'];
+    $drupalnode = node_load($node->entity_id);
+    // Get the taxonomy for the node, creates a link to the parent forum
+    $taxonomy = reset($drupalnode->taxonomy);
+    if ($vocab = taxonomy_vocabulary_load($taxonomy->vid)) {
+      $variables['parent_forum'] = l($taxonomy->name, "community/forum/{$taxonomy->tid}");
+    }
+    break;
+  case 'comment':
+    // Get the node id for this comment
+    $nid = $variables['result']['fields']['tos_content_extra'];
+    $drupalnode = node_load($nid);
+    // Parent forum topic title
+    $variables['parent_title'] = $drupalnode->title;
+    // Link to the parent forum topic
+    $variables['parent_topic'] = l($drupalnode->title, drupal_get_path_alias('node/' . $nid) );
+    // Get the taxonomy for the node, creates a link to the parent forum
+    $taxonomy = reset($drupalnode->taxonomy);
+    if ($vocab = taxonomy_vocabulary_load($taxonomy->vid)) {
+      $variables['parent_forum'] = l($taxonomy->name, "community/forum/{$taxonomy->tid}");
+    }
+  break;
   default:
   }
 }
@@ -703,7 +743,7 @@ function _boinc_create_moderator_links(&$links, &$moderator_links) {
   // Create an array of HTML elements from the $links string, keys
   // are the class attribute for the <li> tags.
   $dom = new DOMDocument;
-  $dom->loadHTML($links);
+  $dom->loadHTML(mb_convert_encoding($links, 'HTML-ENTITIES', 'UTF-8'));
   foreach($dom->getElementsByTagName('li') as $node) {
     $key = $node->getAttribute("class");
     $alllinks[$key] = $dom->saveHTML($node);
@@ -743,7 +783,7 @@ function _boinc_create_moderator_links(&$links, &$moderator_links) {
 function _boinc_firstlink(&$alink) {
   if (!empty($alink)) {
     $dom = new DomDocument;
-    $dom->loadHTML($alink);
+    $dom->loadHTML(mb_convert_encoding($alink, 'HTML-ENTITIES', 'UTF-8'));
 
     $myli = $dom->getElementsByTagName('li');
     if ($myli->length>0) {
@@ -752,4 +792,25 @@ function _boinc_firstlink(&$alink) {
       $alink = $dom->saveHTML($myli[0]);
     }
   }
+}
+
+/*
+ * Private function to generate the action links
+ */
+function _boinc_action_links() {
+  global $user;
+  global $base_path;
+
+  $output = '<ul class="menu"><li class="first">';
+  if ($user->uid) {
+    $output .= '<a href="' . url('logout') . '">' . bts('Logout') . '</a>';
+  } else {
+    $output .= '<a href="' . url('user/login', array('query' => drupal_get_destination()) ) . '">' . bts('Login') . '</a>';
+  }
+  $output .= '</li>';
+  if (module_exists('global_search') OR module_exists('global_search_solr')) {
+    $output .= '<li class="last"> <a class="search" href="' . url('search/site') . '">' . bts('search') .'</a> </l1>';
+  }
+  $output .= '</ul>';
+  return $output;
 }

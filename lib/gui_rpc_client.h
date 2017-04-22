@@ -17,8 +17,8 @@
 
 // a C++ interface to BOINC GUI RPC
 
-#ifndef _GUI_RPC_CLIENT_H_
-#define _GUI_RPC_CLIENT_H_
+#ifndef BOINC_GUI_RPC_CLIENT_H
+#define BOINC_GUI_RPC_CLIENT_H
 
 #if !defined(_WIN32) || defined (__CYGWIN__)
 #include <cstdio>
@@ -401,7 +401,10 @@ struct CC_STATE {
     APP_VERSION* lookup_app_version(PROJECT*, APP*,
         char* platform, int vnum, char* plan_class
     );
-    APP_VERSION* lookup_app_version_old(PROJECT*, APP*, int);
+    APP_VERSION* lookup_app_version(PROJECT*, APP*,
+        int vnum, char* plan_class
+    );
+    APP_VERSION* lookup_app_version(PROJECT*, APP*, int vnum);
     WORKUNIT* lookup_wu(PROJECT*, const char* name);
     RESULT* lookup_result(PROJECT*, const char* name);
     RESULT* lookup_result(const char* url, const char* name);
@@ -836,4 +839,4 @@ struct SET_LOCALE {
 
 extern int read_gui_rpc_password(char*);
 
-#endif /* _GUI_RPC_CLIENT_H_ */
+#endif // BOINC_GUI_RPC_CLIENT_H

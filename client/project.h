@@ -15,8 +15,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with BOINC.  If not, see <http://www.gnu.org/licenses/>.
 
-#ifndef _PROJECT_
-#define _PROJECT_
+#ifndef BOINC_PROJECT_H
+#define BOINC_PROJECT_H
 
 #include "app_config.h"
 #include "client_types.h"
@@ -178,6 +178,7 @@ struct PROJECT : PROJ_AM {
         // computed by get_disk_usages()
     double disk_share;
         // computed by get_disk_shares();
+    bool report_results_immediately;
 
     // items sent in scheduler replies,
     // requesting that various things be sent subsequent requests
@@ -312,7 +313,7 @@ struct PROJECT : PROJ_AM {
     // job counting
     //
     int njobs_success;
-    int njobs_fail;
+    int njobs_error;
 
     // total elapsed time of this project's jobs (for export to GUI)
     //

@@ -183,50 +183,73 @@
     
     <?php if ($primary_links || $navigation): ?>
       <div id="navigation"><div class="section clearfix">
-
-        <?php print theme(array('links__system_main_menu', 'links'), $primary_links,
-          array(
-            'id' => 'main-menu',
-            'class' => 'links clearfix',
-          ),
-          array(
-            'text' => t('Main menu'),
-            'level' => 'h2',
-            'class' => 'element-invisible',
-          ));
-        ?>
+        <div id="main-menu">
+          <?php print theme(array('links__system_main_menu', 'links'), $primary_links,
+            array(
+              'id' => 'main-menu',
+              'class' => 'links clearfix',
+            ),
+            array(
+              'text' => t('Main menu'),
+              'level' => 'h2',
+              'class' => 'element-invisible',
+            ));
+          ?>
+        </div>
         
         <div id="action-links">
           <ul><li class="first">
             <?php 
               global $user;
-              global $base_path;
               if ($user->uid):
-                echo '<a href="' . $base_path . 'logout"><span class="secondary-link tab">' . bts('Logout') . '</span></a>';
+                echo '<a href="' . url('logout') . '"><span class="secondary-link tab">' . bts('Logout') . '</span></a>';
               else:
-                echo '<a href="' . $base_path . 'user/login?' . drupal_get_destination() . '"><span class="secondary-link tab">' . bts('Login') . '</span></a>';
+                echo '<a href="' . url('user/login', array('query' => drupal_get_destination()) ) . '"><span class="secondary-link tab">' . bts('Login') . '</span></a>';
               endif;
             ?>
             </li>
             <?php if (module_exists('global_search') OR module_exists('global_search_solr')): ?>
-              <li class="last"><a class="search" href="<?php print $base_path; ?>search/site"><span class="tab"><?php print bts('search'); ?></span></a></li>
+              <li class="last"><a class="search" href="<?php print url('search/site') ?>"><span class="tab"><?php print bts('search'); ?></span></a></li>
             <?php endif; ?>
           </ul>
         </div>
-        
-        <?php print theme(array('links__system_secondary_menu', 'links'), $secondary_links,
-          array(
-            'id' => 'secondary-menu',
-            'class' => 'links clearfix',
-          ),
-          array(
-            'text' => t('Secondary menu'),
-            'level' => 'h2',
-            'class' => 'element-invisible',
-          ));
-        ?>
 
-        <?php print $navigation; ?>
+        <div id="sub-menu">
+          <?php print theme(array('links__system_secondary_menu', 'links'), $secondary_links,
+            array(
+              'id' => 'secondary-menu',
+              'class' => 'links clearfix',
+            ),
+            array(
+              'text' => t('Secondary menu'),
+              'level' => 'h2',
+              'class' => 'element-invisible',
+            ));
+          ?>
+        </div>
+
+        <?php if (isset($tertiary_links)) : ?>
+          <div id="sub-menu">
+            <?php print theme(array('links__system_tertiary_menu', 'links'), $tertiary_links,
+              array(
+                'id' => 'tertiary-menu',
+                'class' => 'links clearfix',
+              ),
+              array(
+                'text' => t('Tertiary menu'),
+                'level' => 'h2',
+                'class' => 'element-invisible',
+              ));
+            ?>
+          </div>
+        <?php endif; ?>
+
+        <div id="navigation-mmt">
+          <div id="hamburger-menu" class="block">
+            <?php print render($menu_tree_onlyactive); ?>
+            <?php print $action_links; ?>
+          </div>
+        </div>
 
       </div></div> <!-- /.section, /#navigation -->
     <?php endif; ?>
