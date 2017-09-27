@@ -1109,7 +1109,6 @@ void CLIENT_STATE::append_unfinished_time_slice(vector<RESULT*> &run_list) {
 //
 bool CLIENT_STATE::enforce_run_list(vector<RESULT*>& run_list) {
     unsigned int i;
-    vector<ACTIVE_TASK*> preemptable_tasks;
     int retval;
     double ncpus_used=0;
     ACTIVE_TASK* atp;
@@ -1443,9 +1442,11 @@ bool CLIENT_STATE::enforce_run_list(vector<RESULT*>& run_list) {
                 continue;
             }
             if (retval) {
-                report_result_error(
-                    *(atp->result), "Couldn't start or resume: %d", retval
+                char err_msg[4096];
+                snprintf(err_msg, sizeof(err_msg),
+                    "Couldn't start or resume: %d", retval
                 );
+                report_result_error(*(atp->result), err_msg);
                 request_schedule_cpus("start failed");
                 continue;
             }

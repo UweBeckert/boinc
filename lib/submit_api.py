@@ -51,6 +51,8 @@ class JOB_DESC:
         return
     def to_xml(self):
         xml = '<job>\n'
+        if hasattr(self, 'name'):
+            xml += '<name>%s</name>\n'%self.name
         if hasattr(self, 'rsc_fpops_est'):
             xml += '<rsc_fpops_est>%f</rsc_fpops_est>\n'%self.rsc_fpops_est
         if hasattr(self, 'command_line'):
@@ -82,6 +84,10 @@ class BATCH_DESC:
             xml += '<batch_id>%s</batch_id>\n'%(self.batch_id)
         elif hasattr(self, 'batch_name'):
             xml += '<batch_name>%s</batch_name>\n'%(self.batch_name)
+
+        if hasattr(self, 'app_version_num'):
+            xml += '<app_version_num>%d</app_version_num>\n'%(self.app_version_num)
+
         for job in self.jobs:
             xml += job.to_xml()
         xml += '</batch>\n</%s>\n' %(op)

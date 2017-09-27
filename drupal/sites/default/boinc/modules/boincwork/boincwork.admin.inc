@@ -49,7 +49,49 @@ function boincwork_admin_prefs_upload_form(&$form_state) {
     '#type' => 'textarea',
     '#title' => t('Project specific preferences XML'),
     '#default_value' => variable_get('boinc_project_specific_prefs_config', "<project_specific_preferences>\n\n</project_specific_preferences>"),
-    '#required' => TRUE
+    '#required' => TRUE,
+    '#rows' => 14,
+  );
+  $form['help'] = array(
+    '#title' => t('Help'),
+    '#type' => 'fieldset',
+    '#description' => '',
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+  $form['help']['text'] = array(
+    '#title' => t('Instructions'),
+    '#type' => 'item',
+    '#value' => '
+Copy and paste an XML file into the textfield above. The XML must have at least one of three containers: &lt;app_overrides&gt;,  &lt;group&gt;, and &lt;compound&gt;.</p>
+<p>The list of apps from the database and the list of apps, listed within &lt;app_overrides&gt;, from the project-specific XML (above) are merged together with the following algorithm.
+<ul>
+  <li> The algorithm uses applications in the database to determine
+    what applications are listed in the Web form. If an application
+    is present in the project-specific XML but not in the database,
+    it is ignored. The field \'id\' is used to match the
+    applications between the two.
+  <li> If an application is in the database, the other attributes are
+    obtained from the project-specific XML. The list of
+    applications in this XML are overrides. Of importance, the name
+    in the XML configuration will override the name found in the
+    database.
+  <li> The attributes for an application are obtained from the
+    project-specific XML. However, if they are not present, the
+    defaults are:
+  <ul>
+    <li> selected: true
+    <li> enabled: true
+    <li> weight: 100
+  </ul>
+</ul></p>
+
+<p>The list of applications is sorted for display. The sort comparison
+function _dbapps_compare() is used. It sorts first by weight:
+smaller numbers float up, larger numbers sink down; then
+alphabetically by name using strnatcmp(); and finally by app
+id. Weight defaults to 100, and must be a positive integer.</p>
+',
   );
   $form['submit'] = array(
     '#type' => 'submit',
@@ -110,9 +152,9 @@ function boincwork_admin_prefs_presets_page($preset = 'standard') {
   $output .= drupal_get_form('boincwork_admin_prefs_presets_form', $preset);
 
   $output .= '<div>';
-  $output .= bts('Usage: \'Save configuration\' will save the above preferences into the drupal database. These will be the preset computing (global) preferences that will fill in the preferences form once a user loads the Account Preferences page.');
+  $output .= bts('Usage: \'Save configuration\' will save the above preferences into the drupal database. These will be the preset computing (global) preferences that will fill in the preferences form once a user loads the Account Preferences page.', array(), NULL, 'boinc:admin-boinc-preference-presets');
   $output .= '<p>';
-  $output .= bts('\'Save configuration with disk usage settings from config.xml\' will save the above preferences into the drupal database, but also load disk usage settings from the BOINC project\'s config.xml file. These will overwrite any disk usage settings you have placed above. Caution: A user\'s personal preferences will not change if you load the disk usage settings from config.xml here into the drupal database. They must change their preference settings manually.');
+  $output .= bts('\'Save configuration with disk usage settings from config.xml\' will save the above preferences into the drupal database, but also load disk usage settings from the BOINC project\'s config.xml file. These will overwrite any disk usage settings you have placed above. Caution: A user\'s personal preferences will not change if you load the disk usage settings from config.xml here into the drupal database. They must change their preference settings manually.', array(), NULL, 'boinc:admin-boinc-preference-presets');
   $output .= '</div>';
   return $output;
 }
@@ -124,7 +166,7 @@ function boincwork_admin_prefs_presets_form(&$form_state, $preset = 'standard') 
 
   // Check database for preset prefs
   if (!variable_get('boincwork_preset_prefs', null))
-    drupal_set_message(bts('No presets found in database, loading a default set of preferences for each preset. These will be saved to the database once you click \'Save configuration\'.'), 'status');
+    drupal_set_message(bts('No presets found in database, loading a default set of preferences for each preset. These will be saved to the database once you click \'Save configuration\'.', array(), NULL, 'boinc:admin-boinc-preference-presets'), 'status');
 
   // Load a copy of the general prefs form
   $form = boincwork_generalprefs_form($form_state, NULL, $preset);

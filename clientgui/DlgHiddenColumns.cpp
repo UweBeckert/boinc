@@ -97,7 +97,7 @@ CDlgHiddenColumns::CDlgHiddenColumns(wxWindow* parent) :
     
     wxBoxSizer* buttonSizer = new wxBoxSizer( wxHORIZONTAL );
 
-    m_btnOK = new wxButton( this, wxID_OK, _("OK"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_btnOK = new wxButton( this, wxID_OK, _("Save"), wxDefaultPosition, wxDefaultSize, 0 );
     m_btnOK->SetToolTip( _("Save all values and close the dialog") );
     buttonSizer->Add( m_btnOK, 0, wxALL, 5 );
 
@@ -184,7 +184,6 @@ void CDlgHiddenColumns::CreateCheckboxes() {
 
         CBOINCListCtrl* listCtrl = pView->GetListCtrl();
         wxInt32 iShownColumnCount = listCtrl->GetColumnCount();
-        wxString strHiddenColumns;
         wxArrayInt aOrder(iShownColumnCount);
 
 #ifdef wxHAS_LISTCTRL_COLUMN_ORDER

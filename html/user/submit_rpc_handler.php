@@ -192,7 +192,7 @@ function stage_files(&$jobs) {
 // submit a list of jobs with a single create_work command.
 //
 function submit_jobs(
-    $jobs, $template, $app, $batch_id, $priority,
+    $jobs, $template, $app, $batch_id, $priority, $app_version_num,
     $result_template_file,      // batch-level; can also specify per job
     $workunit_template_file
 ) {
@@ -241,6 +241,9 @@ function submit_jobs(
     }
     if ($workunit_template_file) {
         $cmd .= " --wu_template templates/$workunit_template_file";
+    }
+    if ($app_version_num) {
+        $cmd .= " --app_version_num $app_version_num";
     }
     $cmd .= " --stdin >$errfile 2>&1";
     $h = popen($cmd, "w");
@@ -353,6 +356,8 @@ function xml_get_jobs($r) {
     return $jobs;
 }
 
+// $r is a simplexml object for the request message
+//
 function submit_batch($r) {
     xml_start_tag("submit_batch");
     $app = get_submit_app((string)($r->batch->app_name));
@@ -365,6 +370,7 @@ function submit_batch($r) {
     stage_files($jobs);
     $njobs = count($jobs);
     $now = time();
+    $app_version_num = (int)($r->batch->app_version_num);
     $batch_id = (int)($r->batch->batch_id);
     if ($batch_id) {
         $batch = BoincBatch::lookup_id($batch_id);
@@ -432,7 +438,7 @@ function submit_batch($r) {
     }
 
     submit_jobs(
-        $jobs, $template, $app, $batch_id, $let,
+        $jobs, $template, $app, $batch_id, $let, $app_version_num,
         $result_template_file, $workunit_template_file
     );
 
@@ -622,6 +628,10 @@ function query_batch($r) {
     echo "</query_batch>\n";
 }
 
+function results_sent($wu) {
+    return BoincResult::count("workunitid=$wu->id and sent_time>0");
+}
+
 // variant for Condor, which doesn't care about job instances
 // and refers to batches by name
 //
@@ -655,13 +665,21 @@ function query_batch2($r) {
     foreach ($batches as $batch) {
         $wus = BoincWorkunit::enum("batch = $batch->id $mod_time_clause");
         echo "   <batch_size>".count($wus)."</batch_size>\n";
+
+        // job status is:
+        // DONE if done
+        // ERROR if error
+        // IN_PROGRESS if at least one instance sent
+        // QUEUED if no instances sent
         foreach ($wus as $wu) {
             if ($wu->canonical_resultid) {
                 $status = "DONE";
             } else if ($wu->error_mask) {
                 $status = "ERROR";
-            } else {
+            } else if (results_sent($wu) > 0) {
                 $status = "IN_PROGRESS";
+            } else {
+                $status = "UNSENT";
             }
             echo
 "    <job>
@@ -857,6 +875,18 @@ function ping($r) {
     echo "<success>1</success>
         </ping>
     ";
+}
+
+if (0) {
+$r = simplexml_load_string("
+<query_batch2>
+    <authenticator>x</authenticator>
+    <batch_name>batch_30</batch_name>
+    <batch_name>batch_31</batch_name>
+</query_batch2>
+");
+query_batch2($r);
+exit;
 }
 
 if (0) {

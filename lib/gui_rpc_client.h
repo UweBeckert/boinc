@@ -39,6 +39,7 @@
 #include "common_defs.h"
 #include "filesys.h"
 #include "hostinfo.h"
+#include "keyword.h"
 #include "miofile.h"
 #include "network.h"
 #include "notice.h"
@@ -232,6 +233,7 @@ struct WORKUNIT {
     double rsc_disk_bound;
     PROJECT* project;
     APP* app;
+    JOB_KEYWORDS job_keywords;
 
     WORKUNIT();
 
@@ -752,6 +754,8 @@ struct RPC_CLIENT {
     int set_global_prefs_override_struct(GLOBAL_PREFS&, GLOBAL_PREFS_MASK&);
     int get_cc_config(CC_CONFIG& config, LOG_FLAGS& log_flags);
     int set_cc_config(CC_CONFIG& config, LOG_FLAGS& log_flags);
+    int get_app_config(const char* url, APP_CONFIGS& conf);
+    int set_app_config(const char* url, APP_CONFIGS& conf);
     int get_daily_xfer_history(DAILY_XFER_HISTORY&);
 	int set_language(const char*);
 };
