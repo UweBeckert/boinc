@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2016 University of California
+// Copyright (C) 2018 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -22,6 +22,8 @@
 #ifdef __APPLE__
 #include "mac/MacGUI.pch"
 #include "mac_util.h"
+
+#include "mac_branding.h"
 #endif
 
 #include "stdwx.h"
@@ -785,11 +787,6 @@ bool CAdvancedFrame::CreateNotebook() {
 
     pPanel->SetSizer(pPanelSizer);
     pPanel->Layout();
-
-#ifdef __WXMAC__
-    //Accessibility
-    HIObjectSetAccessibilityIgnored((HIObjectRef)pPanel->GetHandle(), true);
-#endif
 
     wxLogTrace(wxT("Function Start/End"), wxT("CAdvancedFrame::CreateNotebook - Function End"));
     return true;
@@ -1732,7 +1729,6 @@ void CAdvancedFrame::OnRefreshView(CFrameEvent& WXUNUSED(event)) {
     wxLogTrace(wxT("Function Start/End"), wxT("CAdvancedFrame::OnRefreshView - Function End"));
 }
 
-
 void CAdvancedFrame::OnConnect(CFrameEvent& WXUNUSED(event)) {
     wxLogTrace(wxT("Function Start/End"), wxT("CAdvancedFrame::OnConnect - Function Begin"));
     
@@ -1845,7 +1841,7 @@ void CAdvancedFrame::OnConnect(CFrameEvent& WXUNUSED(event)) {
                 fscanf(f, "BrandId=%ld\n", &iBrandID);
                 fclose(f);
             }
-            if ((iBrandID > 0) && (iBrandID < 4))
+            if ((iBrandID > 0) && (iBrandID < NUMBRANDS))
 #endif
             {
                 // If successful, hide the main window if we showed it

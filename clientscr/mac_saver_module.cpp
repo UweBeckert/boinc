@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2008 University of California
+// Copyright (C) 2018 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -52,6 +52,7 @@ extern "C" {
 #include "diagnostics.h"
 #include "str_replace.h"
 #include "mac_util.h"
+#include "mac_branding.h"
 
 //#include <drivers/event_status_driver.h>
 
@@ -106,6 +107,7 @@ const char *  CantLaunchDefaultGFXAppMsg = "Can't launch default screensaver mod
 const char *  DefaultGFXAppCantRPCMsg = "Default screensaver module couldn't connect to BOINC application";
 const char *  DefaultGFXAppCrashedMsg = "Default screensaver module had an unrecoverable error";
 const char *  RunningOnBatteryMsg = "Computing and screensaver disabled while running on battery power.";
+const char *  IncompatibleMsg = " is not compatible with this version of OS X.";
 
 //const char *  BOINCExitedSaverMode = "BOINC is no longer in screensaver mode.";
 
@@ -169,6 +171,62 @@ void closeBOINCSaver() {
         gspScreensaver->ShutdownSaver();
         delete gspScreensaver;
         gspScreensaver = NULL;
+    }
+}
+
+
+void incompatibleGfxApp(char * appPath, pid_t pid, int slot){
+    char *p;
+    static char buf[1024];
+    static double msgstartTime = 0.0;
+    int retval;
+    bool gotAppName = false;
+    int exitStatus;
+    
+    if (gspScreensaver) {
+        if (msgstartTime == 0.0) {
+            msgstartTime = getDTime();
+            buf[0] = '\0';
+            
+            if (gspScreensaver->HasProcessExited(pid, exitStatus)) {
+                return;
+            }
+            
+            retval = gspScreensaver->rpc->get_state(gspScreensaver->state);
+            if (!retval) {
+                strlcpy(buf, "Screensaver ", sizeof(buf));
+                for (int i=0; i<gspScreensaver->state.results.size(); i++) {
+                    RESULT* r = gspScreensaver->state.results[i];
+                    if (r->slot == slot) {
+                        if (r->app) {
+                            if (r->app->user_friendly_name[0]) {
+                                strlcat(buf, "of application ", sizeof(buf));
+                                strlcat(buf, r->app->user_friendly_name, sizeof(buf));
+                                gotAppName = true;
+                            }
+                        }
+                    }
+                }
+            } // if (!retval)
+            
+            if (!gotAppName) {
+                p = strrchr(appPath, '/');
+                if (!p) p = appPath;
+                strlcat(buf, "\"", sizeof(buf));
+                strlcat(buf, p+1, sizeof(buf));
+                strlcat(buf, "\"", sizeof(buf));
+            }
+            strlcat(buf, IncompatibleMsg, sizeof(buf));
+            gspScreensaver->setSSMessageText(buf);
+            gspScreensaver->SetError(0, SCRAPPERR_GFXAPPINCOMPATIBLE);
+        }   // End if (msgstartTime == 0.0)
+
+        if (msgstartTime && (getDTime() - msgstartTime > 5.0)) {
+            gspScreensaver->markAsIncompatible(appPath);
+            launchedGfxApp("", 0, -1);
+            msgstartTime = 0.0;
+            gspScreensaver->terminate_screensaver(pid, NULL);
+        }
     }
 }
 
@@ -244,7 +302,6 @@ CScreensaver::CScreensaver() {
     m_CurrentBannerMessage = 0;
     m_bQuitDataManagementProc = false;
     m_bDataManagementProcStopped = false;
-    m_BrandText = "BOINC";
     
     m_hDataManagementThread = NULL;
     m_hGraphicsApplication = NULL;
@@ -343,20 +400,7 @@ OSStatus CScreensaver::initBOINCApp() {
     saverState = SaverState_CantLaunchCoreClient;
     
     brandId = GetBrandID();
-    switch(brandId) {
-    case 1:
-        m_BrandText = "GridRepublic Desktop";
-         break;
-    case 2:
-        m_BrandText = "Progress Thru Processors Desktop";
-         break;
-    case 3:
-        m_BrandText = "Charity Engine Desktop";
-         break;
-    default:
-        m_BrandText = "BOINC";
-        break;
-    }
+    m_BrandText = brandName[brandId];
 
     m_CoreClientPID = FindProcessPID("boinc", 0);
     if (m_CoreClientPID) {
@@ -373,13 +417,8 @@ OSStatus CScreensaver::initBOINCApp() {
 
     // Find boinc client within BOINCManager.app
     // First, try default path
-    strcpy(boincPath, "/Applications/");
-    if (brandId) {
-        strcat(boincPath, m_BrandText);
-    } else {
-        strcat(boincPath, "BOINCManager");
-    }
-    strcat(boincPath, ".app/Contents/Resources/boinc");
+    strcpy(boincPath, appPath[brandId]);
+    strcat(boincPath, "/Contents/Resources/boinc");
 
     // If not at default path, search for it by creator code and bundle identifier
     if (!boinc_file_exists(boincPath)) {
@@ -535,6 +574,9 @@ int CScreensaver::getSSMessage(char **theMessage, int* coveredFreq) {
             break;
          case SCRAPPERR_DEFAULTGFXAPPCRASHED:
             setSSMessageText(DefaultGFXAppCrashedMsg);
+            break;
+            case SCRAPPERR_GFXAPPINCOMPATIBLE:
+                // Message was set in incompatibleGfxApp()
             break;
         default:
             // m_bErrorMode is TRUE if we should display moving logo (no graphics app is running)
@@ -815,7 +857,9 @@ int CScreensaver::GetBrandID()
         fscanf(f, "BrandId=%ld\n", &iBrandId);
         fclose(f);
     }
-        
+    if ((iBrandId < 0) || (iBrandId > (NUMBRANDS-1))) {
+        iBrandId = 0;
+    }
     return iBrandId;
 }
 

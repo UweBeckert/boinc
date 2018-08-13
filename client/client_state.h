@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2008 University of California
+// Copyright (C) 2018 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -52,6 +52,7 @@ using std::vector;
 #include "net_stats.h"
 #include "pers_file_xfer.h"
 #include "prefs.h"
+#include "project_list.h"
 #include "scheduler_op.h"
 #include "time_stats.h"
 
@@ -100,6 +101,7 @@ struct CLIENT_STATE {
     GET_CURRENT_VERSION_OP get_current_version_op;
     GET_PROJECT_LIST_OP get_project_list_op;
     ACCT_MGR_OP acct_mgr_op;
+    LOOKUP_LOGIN_TOKEN_OP lookup_login_token_op;
 
     CLIENT_TIME_STATS time_stats;
     GLOBAL_PREFS global_prefs;
@@ -243,7 +245,14 @@ struct CLIENT_STATE {
     double new_version_check_time;
     double all_projects_list_check_time;
         // the time we last successfully fetched the project list
+    bool autologin_in_progress;
+    bool autologin_fetching_project_list;
+    PROJECT_LIST project_list;
+    void process_autologin(bool first);
+
+// --------------- current_version.cpp:
     string newer_version;
+    string client_version_check_url;
 
 // --------------- client_state.cpp:
     CLIENT_STATE();
@@ -399,7 +408,7 @@ struct CLIENT_STATE {
     const char* get_primary_platform();
     void add_platform(const char*);
     void detect_platforms();
-    void write_platforms(PROJECT*, MIOFILE&);
+    void write_platforms(PROJECT*, FILE*);
     bool is_supported_platform(const char*);
 
 // --------------- cs_prefs.cpp:

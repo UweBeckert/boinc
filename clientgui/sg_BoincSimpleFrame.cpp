@@ -1,6 +1,6 @@
 // This file is part of BOINC.
 // http://boinc.berkeley.edu
-// Copyright (C) 2008 University of California
+// Copyright (C) 2018 University of California
 //
 // BOINC is free software; you can redistribute it and/or modify it
 // under the terms of the GNU Lesser General Public License
@@ -53,6 +53,8 @@
 #ifdef __WXMAC__
 #include "util.h"
 #include "mac_util.h"
+
+#include "mac_branding.h"
 #endif
 
 // Workaround for Linux refresh problem
@@ -817,7 +819,7 @@ void CSimpleFrame::OnConnect(CFrameEvent& WXUNUSED(event)) {
                 fscanf(f, "BrandId=%ld\n", &iBrandID);
                 fclose(f);
             }
-            if ((iBrandID > 0) && (iBrandID < 4))
+            if ((iBrandID > 0) && (iBrandID < NUMBRANDS))
 #endif
             {
                 // If successful, hide the main window if we showed it
@@ -984,9 +986,6 @@ CSimpleGUIPanel::CSimpleGUIPanel(wxWindow* parent) :
     SetBackgroundBitmap();   
 
 #ifdef __WXMAC__
-    // Tell accessibility aids to ignore this panel (but not its contents)
-    HIObjectSetAccessibilityIgnored((HIObjectRef)GetHandle(), true);
-    
     if (compareOSVersionTo(10, 7) >= 0) {
         m_iRedRingRadius = 4;
     } else {
